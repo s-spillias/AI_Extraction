@@ -1,0 +1,2 @@
+"0","statdfx %>%  group_by(AI, Criteria) %>%  summarise(t_value = t.test(value, mu = 2, alternative = ""less"")$statistic, p_value = t.test(value, mu = 2, alternative = ""less"")$p.value)"
+"2","`summarise()` has grouped output by 'AI'. You can override using the `.groups` argument."

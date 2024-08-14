@@ -1,0 +1,7 @@
+"0",""
+"0","full_df %>% filter(!str_detect(Reviewer,'GPT')) %>% "
+"0","  group_by(Reviewer,Criteria) %>% "
+"0","  ggplot() +"
+"0","  geom_density(fill = 'skyblue',aes(x = value), adjust = 2.5) +"
+"0","  facet_grid(Reviewer~ Criteria) +"
+"0","  theme_classic()"

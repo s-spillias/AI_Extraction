@@ -1,0 +1,3 @@
+"0","df_validate %>% filter(Criteria != 'Crit4') %>% ggplot() +"
+"0","  geom_bar(stat = 'identity', aes(x = Criteria, y = value, fill = Reviewer), position = 'dodge') +"
+"0","  facet_wrap(AI~Question)"

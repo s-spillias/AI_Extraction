@@ -1,0 +1,302 @@
+---  
+title: "Statistical Analysis for 'Generative AI Can Reliably Extract Qualitative Data from Peer-Reviewed Documents'"  
+date: "2024-07-13"  
+output: pdf_document  
+---  
+  
+```{r setup, include=FALSE}  
+knitr::opts_chunk$set(echo = TRUE)
+ 
+# Loading necessary libraries for data manipulation, visualization, and statistical analysis.  
+library(knitr)  
+library(dplyr)  
+library(tidyverse)  
+library(readxl)  
+library(beyonce) # Note: This package may be fictional or specific to the context.  
+library(ggpubr)  
+library(lme4)  
+library(emmeans)  
+library(lmerTest)  
+# Setting options to allow for extensive data printing, if necessary.  
+options(max.print = 999999)
+```
+
+
+```{r}  
+# Initializing file paths and reading various datasets for analysis.  
+# The datasets include AI and human annotations, as well as validation assessments.  
+  
+# File path for the main dataset.  
+file_path = 'output_assessment_CHATGPT_explanation.xlsx'  
+# List of validation file paths.  
+validate_path = list.files('Raw_Team_Assessment', pattern = 'validate', full.names = TRUE)  
+# Path to store figures.  
+figure_folder = '../Manuscript/Figures'  
+  
+# Reading all sheets from the main Excel file and creating a list of dataframes.  
+sheet_names <- excel_sheets(file_path)  
+all_data_list <- lapply(sheet_names, function(sheet) {  
+  read_excel(file_path, sheet = sheet) %>%   
+    mutate(AI = sheet)})  
+  
+# Defining a function to calculate summary statistics.  
+do_stats = function(x){  
+  x %>%   
+    summarise(mean = mean(value),  
+              standard_error = sd(value, na.rm = TRUE) / sqrt(n()),  
+              st_dev = sd(value),  
+              difficulty_mean = mean(Difficulty, na.rm = TRUE),  
+              st_dev_difficulty = sd(Difficulty, na.rm = TRUE),  
+              standard_error_difficulty = sd(Difficulty, na.rm = TRUE) / sqrt(n()),  
+    )}  
+  
+# Reading and processing difficulty levels from the human extraction dataset.  
+difficulty <- read_excel("Extraction_Human_Difficulty.xlsx") %>% as_tibble() %>%   
+  pivot_longer(-Question) %>%   
+  setNames(c('Citation','Question','Difficulty')) %>%   
+  mutate(Difficulty = case_match(Difficulty, 'Easy' ~ 1, 'Medium' ~ 2, 'Hard' ~ 3))  
+
+file_path = 'Extraction_ai.xlsx'
+sheets = excel_sheets(file_path)
+ai_extractions <- sheets %>% lapply(function(x) read_excel(file_path, sheet = x) %>% as_tibble() %>% 
+                                      mutate(across(everything(), function(x) x %>% str_replace("Response: ",""))) %>%
+                                      separate_wider_delim(-Citation, delim = "Context:", names = c('Response','Context'), names_sep = '***',too_few = "align_start") %>% 
+                                      mutate(across(-Citation, nchar))) %>% setNames(sheets)
+# Read and process the human extraction data from the Excel file.  
+human_extraction = "Human_Extraction_Cleaned.xlsx" %>% 
+  read_excel(sheet = 'Human') %>%
+  select(-5, -(seq(8, ncol(.), by = 3))) %>%
+  select(-1) %>% 
+  slice(-(1:2)) %>% 
+  mutate(across(-Question, nchar)) %>% 
+  select(-last_col())
+
+# Calculate verbosity ratios by comparing the length of AI and human extractions. 
+verbosity_ratios = sheets %>% lapply(function(x) bind_cols(human_extraction$Question, (ai_extractions[[x]] %>% select(-1))/(human_extraction %>% select(-1))))
+
+# Define the list of reviewers and corresponding questions for assessment.  
+reviewers = c(
+  'R1', "Which country was the study conducted in?",
+  'R1',"Provide some background as to the drivers and/or motivators of community-based fisheries management.",
+  'R2',"What management mechanisms are used?",
+  'R3',"Which groups of people are involved in the management as part of the CBFM case-studies? Choices: Community-members, Researchers, Practitioners, Government, NGOs, Other",
+  'R4',"What benefits of Community-Based Fisheries Management are reported in this case study?",
+  'R4',"What are the indicators of success of CBFM?",
+  'R1',"How was the data on benefits collected?",
+  'R3',"What are the reported barriers to success of Community-Based Fisheries Management?",
+  'R2',"Guidelines for future implementation of CBFM?",
+  'R3',"How does the community monitor the system they are managing?",
+  'R4',"How does the community make decisions?")
+
+# Read and process the human extraction data, creating an 'extractor' data frame with relevant columns.  
+# The citation column is cleaned to create a shortened citation for easier handling.
+extractor <- "Human_Extraction_Cleaned.xlsx" %>% 
+  read_excel(sheet = 'Human') %>%
+  dplyr::select(-5, -(seq(8, ncol(.), by = 3))) %>%
+  #dplyr::select(-1) %>% 
+  dplyr::slice(-(1:2)) %>% 
+  mutate(across(-Question, nchar)) %>% 
+  dplyr::select(-last_col()) %>% 
+  select(-3:-24) %>% 
+  mutate(short_cit = substr(Question, 1,35)) #no idea why citation column is actually the question column in this instance
+colnames(extractor)[1] <- "Extractor"
+colnames(extractor)[2] <- "Citation"
+colnames(extractor)[3] <- "short_cit"
+
+# Create a tibble of reviewers and their associated questions for later use in the analysis. 
+reviewers_id <- matrix(reviewers, nrow = length(reviewers) / 2, byrow = TRUE) %>% as_tibble() %>% 
+  setNames(c("Reviewer","Question"))
+
+# Combine all data sheets into one data frame, 'df_description', for further analysis.  
+df_description = all_data_list %>% bind_rows() %>% 
+  pivot_longer(-c('Citation','AI')) %>% 
+  separate(value, sep = ':::', into = c("value", "description")) %>% 
+  separate(value, sep = "\\|", into = paste0("rep",1:5)) %>% 
+  separate(description, sep = "\\|", into = paste0("Description",1:5)) %>% 
+  pivot_longer(starts_with('rep'), names_to = 'Agent') 
+
+# Further process 'df_description' to create 'ai_df' by separating criteria and pivoting longer for analysis.  
+ai_df <- df_description %>% 
+  dplyr::select(-starts_with('Description')) %>% 
+  separate(value, sep = ';', into = paste0('Crit', 1:4)) %>% 
+  pivot_longer(starts_with('Crit'), names_to = 'Criteria')
+
+
+# Read team assessment data from the specified path and create a list of data frames, 'team_data_list'.  
+team_path = "output_assessment_TEAM.xlsx" #original file with unedited flag values = output_assessment_TEAM_OG.xlsx
+
+sheet_names <- excel_sheets(team_path)
+
+team_data_list <- lapply(sheet_names, function(sheet) {
+  read_excel(team_path, sheet = sheet) %>% 
+    mutate(AI = sheet)
+})
+
+# Process the validation files to create a unified 'df_validate' data frame.  
+# This involves reading the data, binding rows, and reshaping the data frame for analysis. 
+df_validate = validate_path %>% 
+  lapply(function(x) sheet_names %>% lapply(function(y)    read_excel(x, sheet = y) %>% 
+                                              mutate(AI = y, Reviewer = x %>% str_remove("Raw_Team_Assessment/validate_assessment_") %>% str_remove('.xlsx')) %>% 
+                                              bind_rows())
+  ) %>% bind_rows() %>% 
+  pivot_longer(-c('Citation','AI','Reviewer'), names_to = 'Question',values_to = 'Value') %>% 
+  filter(!(Value %>% str_detect("Response|Context"))) %>% 
+  pivot_wider(names_from = 'Reviewer', values_from = 'Value') %>% 
+  filter(!is.na(SCOTT)) %>% 
+  pivot_longer(-c('Citation','AI','Question'), names_to = 'Reviewer',values_to = 'Value') %>% 
+  separate(Value, sep = ';', into = paste0('Crit',1:4)) %>% 
+  pivot_longer(starts_with('crit'),values_to = 'value', names_to = 'Criteria') %>% 
+  mutate(value = as.numeric(value)) %>% 
+  mutate(Reviewer = recode(Reviewer, 'MATT' = 'R1',
+                           'FABIO' = 'R2',
+                           'SCOTT' = 'R3',
+                           'ROWAN' = 'R4'))
+
+stat_summary <- team_data_list %>% bind_rows() %>% 
+  pivot_longer(-c("Citation","AI")) %>% 
+  separate(value, sep = ';', into = paste0('Crit',1:4)) %>% 
+  pivot_longer(starts_with("Crit"), names_to = 'Criteria') %>% 
+  mutate(Agent = 'Human') %>% 
+  bind_rows(ai_df) %>% 
+  mutate(Flag = ifelse(Criteria == 'Crit4' & value > 1, "FLAG",NA),
+         group_agent = ifelse(str_detect(Agent, "Human"), "Human Assessor", "GPT4-Turbo Assessor"),
+         value = as.integer(value)) %>% 
+  {flag_df <<- .} %>% 
+  filter(!is.na(value)) %>% 
+  filter(Criteria != 'Crit4') %>%
+  relocate(value, .after = 'group_agent') %>% 
+  mutate(Criteria = case_match(Criteria, 'Crit1' ~ 'Context to Question',
+                               'Crit2' ~ 'Response to Context',
+                               'Crit3' ~ 'AI Response to Human Response')) %>% 
+  rename('Question' = 'name') %>% 
+  left_join(reviewers_id, by = 'Question') %>% 
+  mutate(Reviewer = ifelse(str_detect(group_agent,'GPT'),'GPT4-Turbo',Reviewer)) %>% 
+  mutate(short_cit = substr(Citation, 1,35)) %>% 
+  left_join(difficulty %>%  mutate(short_cit = substr(Citation, 1,35)) %>% dplyr::select(-Citation), by = c("Question",'short_cit')) %>%
+  mutate(AI = case_match(AI, 'ELICIT' ~ 'Elicit',
+                         'OPENAI' ~ 'GPT4x3',
+                         'OPENAI_single' ~ 'GPT4x1')) %>% 
+  
+  mutate(Question = factor(str_split_fixed(Question, '\\?',2)[,1],levels = str_split_fixed(reviewers_id$Question, '\\?',2)[,1])) %>% 
+  {full_df <<- .} %>% 
+  group_by(group_agent, AI,Criteria) %>% 
+  do_stats()
+
+full_df <- full_df %>%
+  left_join(extractor, by = "short_cit") %>%
+  mutate(Extractor = ifelse(group_agent == "Human Assessor", Extractor, "AI")) %>% 
+  select(-Citation.y) %>% 
+  rename(Citation = Citation.x)
+
+question_df <- full_df %>% 
+  group_by(Reviewer, AI, Criteria, Question) %>% 
+  do_stats()
+
+paper_df <- full_df %>% 
+  group_by(group_agent, AI, Criteria, Citation) %>% 
+  do_stats()
+
+reviewer_df <- full_df %>% 
+  group_by(Reviewer, Criteria) %>% 
+  do_stats()
+
+flag_df <- flag_df %>% filter(!is.na(Flag))
+
+full_df$value <- full_df$value - 2
+
+humandf <- full_df %>% filter(Agent == "Human") %>% select(-short_cit)
+aidf <- full_df %>% filter(Agent != "Human")
+aidf2 <- aidf %>% group_by(Citation, AI, Question, Criteria, Flag, group_agent, Reviewer, Difficulty, Extractor) %>% 
+  summarise(value = median(value)) %>% mutate(Agent = "AI") %>% 
+  select(Citation, AI, Question, Criteria, Agent, Flag, group_agent, value, Reviewer, Difficulty, Extractor)
+statdf <- rbind(humandf, aidf2)
+statdfx <- statdf %>% filter(Agent == "Human")
+
+diffdata <- paper_df %>% filter(group_agent != "GPT4-Turbo Assessor") %>% mutate(short_cit = substr(Citation, 1,35))
+diffdata <- diffdata %>% left_join(select(extractor, short_cit, Extractor), by = c("short_cit")) 
+diffdata <- subset(diffdata, select = -short_cit)
+```
+
+
+# T-test: Comparing values to the mean of 0
+### Conducting a one-sample t-test to determine if the mean of the assessed values for AI Response to Human Response significantly differs from the hypothetical mean value of 0. This test helps us understand whether the AI's performance is above or below the baseline of no difference (0), which would indicate no response or a neutral response. We perform this test for each AI implementation to evaluate their individual performances.  
+```{r comparing distribution, echo=FALSE}
+
+ttest <- statdfx %>%   
+  filter(Criteria == "AI Response to Human Response") %>%   
+  group_by(AI) %>%    
+  summarise(t_value = t.test(value, mu = 0, alternative = "two.sided")$statistic,  
+            p_value = t.test(value, mu = 0, alternative = "two.sided")$p.value)  
+print(ttest)  
+  
+# Visualizing the t-test results to provide a clear representation of the statistical significance.  
+# The bars represent the t-value for each AI, with a dashed red line indicating the baseline mean of 0.  
+# Asterisks (*) denote AI implementations with a p-value less than the significance level (0.05), indicating  
+# a significant difference from the baseline.  
+tplot <- ggplot(ttest, aes(x = AI, y = t_value)) +  
+  geom_bar(stat = "identity", position = "dodge") +  
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  
+  geom_text(aes(label = ifelse(p_value < 0.05, "*", "")),   
+            position = position_dodge(width = 0.9), vjust = -0.5) +  
+  labs(title = "Comparison to Acceptable Extraction Score",  
+       x = "AI",  
+       y = "t-value") +  
+  theme_minimal()  
+plot(tplot)  
+
+```
+
+# Effect of extractor on value and paper on value
+### Assessing the influence of the extractor (human or AI) on the mean assessed values. We use a linear model to compare the mean values across different annotators and determine if the source of extraction significantly affects the assessed values.  
+```{r extractor comparisons}
+
+model_extractor <- lm(mean ~ Extractor, data = filter(diffdata, Criteria == "AI Response to Human Response"))  
+anova(model_extractor) 
+```
+
+# Effect of AI on values (AI response to human response)
+### Utilizing a linear mixed-effects model to examine the impact of different AI implementations  on the assessed values of AI Response to Human Response. The model includes the AI as a fixed effect and both reviewer and citation as random effects to account for variability across different reviewers and papers. 
+```{r AI to value, echo = TRUE}
+aieffect <- lmer(value ~ AI + (1|Reviewer) + (1|Citation), data = filter(statdfx, Criteria == "AI Response to Human Response"))  
+summary(aieffect)  
+anova(aieffect)
+```
+
+# Pairwise comparisons of the AI implementations are performed to understand which differences are significant.  
+### Tukey's method is used for multiple comparisons to adjust for the possibility of type I error.  
+```{r tukey, echo = TRUE}
+
+aieffect_emmeans <- emmeans(aieffect, ~ AI)  
+aieffect_cont <- pairs(aieffect_emmeans, adjust = "tukey")  
+print(aieffect_cont)  
+
+```
+
+# Effect of the individual questions on assessment values
+### Investigating the impact of individual questions on the assessed values using a linear mixed-effects model. This model allows us to see whether the content of the question  affects the quality of AI responses, with question as a fixed effect and reviewer, citation, and AI as random effects to capture variation not explained by the questions alone.
+```{r effect of questions on value, echo = TRUE}
+
+qeffect <- lmer(value ~ Question + (1|Reviewer) + (1|Citation) + (1|AI), data = filter(statdfx, Criteria == "AI Response to Human Response"))
+anova(qeffect)
+
+
+```
+
+# Effect of difficulty on values
+### Assessing how the difficulty level, as perceived by human annotators, influences the assessed quality of AI responses. A linear mixed-effects model is constructed with an interaction term between Difficulty and AI to explore if and how the difficulty of questions may affect AI performance differently. Citation, extractor, and reviewer are included as random effects to control for their potential confounding impacts. 
+```{r diffeffect, echo = TRUE}
+  
+ 
+diff <- lmer(value ~ Difficulty*AI + (1|Citation) + (1|Extractor) + (1|Reviewer), data = filter(statdfx, Criteria == "AI Response to Human Response"))  
+anova(diff)  
+
+```
+
+# Effect of assessor on assesed quality (GPT4 vs human)
+### Exploring the differences in assessed quality between GPT4-Turbo and human assessors. A linear mixed-effects model is used to analyze the effect of the group agent (GPT4 or Human) on the assessed values. This model accounts for the potential variability introduced by the individual annotators and reviewers, which are included as random effects, to isolate the effect of the assessor type.  
+```{r effect if assessor on value}
+
+assessor <- lmer(value ~ group_agent + (1|Extractor) + (1|Reviewer), data = full_df)  
+anova(assessor) 
+```
+
