@@ -1,5 +1,5 @@
 ---  
-title: "Statistical Analysis for 'Generative AI Can Reliably Extract Qualitative Data from Peer-Reviewed Documents'"  
+title: "Statistical Analysis for 'Evaluating Generative AI to Extract Qualitative Data from Peer-Reviewed Documents'"  
 date: "2024-07-13"  
 output: pdf_document  
 ---  
@@ -27,9 +27,9 @@ options(max.print = 999999)
 # The datasets include AI and human annotations, as well as validation assessments.  
   
 # File path for the main dataset.  
-file_path = 'output_assessment_CHATGPT_explanation.xlsx'  
+file_path = 'Data/output_assessment_CHATGPT_explanation.xlsx'  
 # List of validation file paths.  
-validate_path = list.files('Raw_Team_Assessment', pattern = 'validate', full.names = TRUE)  
+validate_path = list.files('Data/Raw_Team_Assessment', pattern = 'validate', full.names = TRUE)  
 # Path to store figures.  
 figure_folder = '../Manuscript/Figures'  
   
@@ -51,19 +51,19 @@ do_stats = function(x){
     )}  
   
 # Reading and processing difficulty levels from the human extraction dataset.  
-difficulty <- read_excel("Extraction_Human_Difficulty.xlsx") %>% as_tibble() %>%   
+difficulty <- read_excel("Data/Extraction_Human_Difficulty.xlsx") %>% as_tibble() %>%   
   pivot_longer(-Question) %>%   
   setNames(c('Citation','Question','Difficulty')) %>%   
   mutate(Difficulty = case_match(Difficulty, 'Easy' ~ 1, 'Medium' ~ 2, 'Hard' ~ 3))  
 
-file_path = 'Extraction_ai.xlsx'
+file_path = 'Data/Extraction_ai.xlsx'
 sheets = excel_sheets(file_path)
 ai_extractions <- sheets %>% lapply(function(x) read_excel(file_path, sheet = x) %>% as_tibble() %>% 
                                       mutate(across(everything(), function(x) x %>% str_replace("Response: ",""))) %>%
                                       separate_wider_delim(-Citation, delim = "Context:", names = c('Response','Context'), names_sep = '***',too_few = "align_start") %>% 
                                       mutate(across(-Citation, nchar))) %>% setNames(sheets)
 # Read and process the human extraction data from the Excel file.  
-human_extraction = "Human_Extraction_Cleaned.xlsx" %>% 
+human_extraction = "Data/Human_Extraction_Cleaned.xlsx" %>% 
   read_excel(sheet = 'Human') %>%
   select(-5, -(seq(8, ncol(.), by = 3))) %>%
   select(-1) %>% 
@@ -90,7 +90,7 @@ reviewers = c(
 
 # Read and process the human extraction data, creating an 'extractor' data frame with relevant columns.  
 # The citation column is cleaned to create a shortened citation for easier handling.
-extractor <- "Human_Extraction_Cleaned.xlsx" %>% 
+extractor <- "Data/Human_Extraction_Cleaned.xlsx" %>% 
   read_excel(sheet = 'Human') %>%
   dplyr::select(-5, -(seq(8, ncol(.), by = 3))) %>%
   #dplyr::select(-1) %>% 
@@ -123,7 +123,7 @@ ai_df <- df_description %>%
 
 
 # Read team assessment data from the specified path and create a list of data frames, 'team_data_list'.  
-team_path = "output_assessment_TEAM.xlsx" #original file with unedited flag values = output_assessment_TEAM_OG.xlsx
+team_path = "Data/output_assessment_TEAM.xlsx" #original file with unedited flag values = output_assessment_TEAM_OG.xlsx
 
 sheet_names <- excel_sheets(team_path)
 
@@ -134,23 +134,7 @@ team_data_list <- lapply(sheet_names, function(sheet) {
 
 # Process the validation files to create a unified 'df_validate' data frame.  
 # This involves reading the data, binding rows, and reshaping the data frame for analysis. 
-df_validate = validate_path %>% 
-  lapply(function(x) sheet_names %>% lapply(function(y)    read_excel(x, sheet = y) %>% 
-                                              mutate(AI = y, Reviewer = x %>% str_remove("Raw_Team_Assessment/validate_assessment_") %>% str_remove('.xlsx')) %>% 
-                                              bind_rows())
-  ) %>% bind_rows() %>% 
-  pivot_longer(-c('Citation','AI','Reviewer'), names_to = 'Question',values_to = 'Value') %>% 
-  filter(!(Value %>% str_detect("Response|Context"))) %>% 
-  pivot_wider(names_from = 'Reviewer', values_from = 'Value') %>% 
-  filter(!is.na(SCOTT)) %>% 
-  pivot_longer(-c('Citation','AI','Question'), names_to = 'Reviewer',values_to = 'Value') %>% 
-  separate(Value, sep = ';', into = paste0('Crit',1:4)) %>% 
-  pivot_longer(starts_with('crit'),values_to = 'value', names_to = 'Criteria') %>% 
-  mutate(value = as.numeric(value)) %>% 
-  mutate(Reviewer = recode(Reviewer, 'MATT' = 'R1',
-                           'FABIO' = 'R2',
-                           'SCOTT' = 'R3',
-                           'ROWAN' = 'R4'))
+
 
 stat_summary <- team_data_list %>% bind_rows() %>% 
   pivot_longer(-c("Citation","AI")) %>% 

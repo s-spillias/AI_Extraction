@@ -23,7 +23,6 @@ knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
 
 # open files - create dataframes #
 file_path = 'output_assessment_CHATGPT_explanation.xlsx'
-validate_path = list.files('Raw_Team_Assessment', pattern = 'assessment', full.names = TRUE)
 figure_folder = '../Manuscript/Figures'
 # firstcontact-gpt4-32k
 # January 29, ran Elicit and GPT4-32k
@@ -115,23 +114,6 @@ team_data_list <- lapply(sheet_names, function(sheet) {
     mutate(AI = sheet)
 })
 # 
-# df_validate = validate_path %>% 
-#   lapply(function(x) sheet_names %>% lapply(function(y)    read_excel(x, sheet = y) %>% 
-#                                               mutate(AI = y, Reviewer = x %>% str_remove("Raw_Team_Assessment/validate_assessment_") %>% str_remove('.xlsx')) %>% 
-#                                               bind_rows())
-#   ) %>% bind_rows() %>% 
-#   pivot_longer(-c('Citation','AI','Reviewer'), names_to = 'Question',values_to = 'Value') %>% 
-#   filter(!(Value %>% str_detect("Response|Context"))) %>% 
-#   pivot_wider(names_from = 'Reviewer', values_from = 'Value') %>% 
-#   filter(!is.na(R1)) %>% 
-#   pivot_longer(-c('Citation','AI','Question'), names_to = 'Reviewer',values_to = 'Value') %>% 
-#   separate(Value, sep = ';', into = paste0('Crit',1:4)) %>% 
-#   pivot_longer(starts_with('crit'),values_to = 'value', names_to = 'Criteria') %>% 
-#   mutate(value = as.numeric(value)) %>% 
-#   # mutate(Reviewer = recode(Reviewer, 'MATT' = 'R1',
-#   #                          'FABIO' = 'R2',
-#   #                          'SCOTT' = 'R3',
-#   #                          'ROWAN' = 'R4'))
 
 stat_summary <- team_data_list %>% bind_rows() %>% 
   pivot_longer(-c("Citation","AI")) %>% 
@@ -190,93 +172,7 @@ flag_df <- flag_df %>% filter(!is.na(Flag))
 
 ### Make Plots ####
 crit_pal = beyonce_palette(127)[-1]
-# ## Overall
-# ggplot(stat_summary, aes(x = AI, y = mean, fill = Criteria, group = Criteria)) +
-#   geom_hline(yintercept = 2, linetype = 'dashed',alpha = 0.5 ) +
-#   geom_col(stat = "identity", position = "dodge", color = "black") +
-#   geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                 position = position_dodge(width = 0.9), width = 0.25) +
-#   labs( x = "AI Implementation", y = "Assessed Quality") +
-#   theme_classic() +
-#   coord_cartesian(ylim = c(1, 3)) +
-#   facet_wrap(~group_agent) +
-#   #scale_y_continuous(    labels = c("Poor","Fair","Good"),breaks = c(1,2,3),) +
-#   scale_fill_manual(values = crit_pal) +
-#   theme(legend.position = 'bottom') 
-# #ggsave(file.path(figure_folder,'overall.png'))
-# 
-# 
-# ## Questions
-# question_df %>% filter(!str_detect(Reviewer,'GPT')) %>% ungroup() %>% 
-#   mutate(
-#     normalized_difficulty_mean = 1 + 2*((difficulty_mean - min(difficulty_mean,na.rm = TRUE)) / (max(difficulty_mean,na.rm = TRUE) - min(difficulty_mean,na.rm = TRUE))),
-#     normalized_difficulty_st_dev = st_dev_difficulty / (max(st_dev_difficulty) - min(st_dev_difficulty)),
-#     normalized_difficulty_standard_error = standard_error_difficulty / (max(standard_error_difficulty) - min(standard_error_difficulty))
-#   ) %>% 
-#   arrange(difficulty_mean) %>% ungroup() %>% 
-#   ggplot() +
-#   aes(x = AI, y = mean, fill = Criteria, group = Criteria) +
-#   geom_hline(yintercept = 2, linetype = 'dashed',alpha = 0.5 ) +
-#   geom_col(stat = "identity", position = "dodge", color = "black") +
-#   geom_segment(aes(x = 4, y = 1.1, xend = 4, yend = 2.9), col = 'orange') +
-#   geom_point(aes(x = 4,y = normalized_difficulty_mean), size = 3, col = 'orange', show.legend = FALSE) +
-#   geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                 position = position_dodge(width = 0.9), width = 0.25) +
-#   # labs(title = "Mean Values by Group and Criteria", x = "Group", y = "Mean Value") +
-#   theme_classic() +
-#   coord_cartesian(ylim = c(1, 3), xlim = c(1,3.7)) +
-#   facet_wrap(~Question, labeller = label_wrap_gen()) +
-#   labs(x = '') +
-#   scale_fill_manual(values = crit_pal) +
-#   scale_y_continuous(
-#     name = "Assessed Quality",
-#     #labels = c("Poor","Fair","Good"),breaks = c(1,2,3),
-#     sec.axis = sec_axis(~ (. - 1)/2, name = "Question Difficulty", labels = c("Easy","Hard"), breaks = c(0,1)),
-#   ) +
-#   theme(axis.text.y.right = element_text(color = "orange"),
-#         strip.text = element_text(size = 8),
-#         legend.position = 'bottom',
-#   ) +
-#   geom_text(aes(x = 4.2, y = 1.15, label = Reviewer, hjust = 1, vjust = 1), size = 3) 
-# #ggsave(file.path(figure_folder,'questions_supp.png'), width = 12, height = 7)
-# 
-# #Check for Reviewer Consistency and validation
-# ggplot(reviewer_df, aes(x = Reviewer, y = mean, fill = Criteria, group = Criteria)) +
-#   geom_hline(yintercept = 2,linetype = 'dashed',alpha = 0.5 ) +
-#   geom_col(stat = "identity", position = "dodge", color = "black") +
-#   geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                 position = position_dodge(width = 0.9), width = 0.25) +
-#   labs(x = "Reviewer", y = "Mean Assessed Quality") +
-#   theme_classic() +
-#   coord_cartesian(ylim = c(1, 3)) +
-#   theme(legend.position = 'bottom') +
-#   #facet_wrap(~Question) +
-#   scale_fill_manual(values = crit_pal)  # Set your desired fill colors
-# #ggsave(file.path(figure_folder,'reviewer_supp.png'), width = 12, height = 7)
-# 
-# df_validate_stats = df_validate %>%
-#   filter(Criteria !='Crit4') %>% 
-#   group_by(Criteria, Reviewer) %>% 
-#   summarise(mean = mean(value),
-#             standard_error = sd(value, na.rm = TRUE) / sqrt(n()),
-#             st_dev = sd(value))
-# ggplot(df_validate_stats, aes(x = Reviewer, y = mean, fill = Criteria, group = Criteria)) +
-#   geom_hline(yintercept = 2,linetype = 'dashed',alpha = 0.5 ) +
-#   geom_col(stat = "identity", position = "dodge", color = "black") +
-#   geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                 position = position_dodge(width = 0.9), width = 0.25) +
-#   labs(x = "Reviewer", y = "Mean Assessed Quality") +
-#   theme_classic() +
-#   coord_cartesian(ylim = c(1, 3)) +
-#   theme(legend.position = 'bottom') +
-#   #facet_wrap(~Question) +
-#   scale_fill_manual(values = crit_pal)
-# 
-# df_validate$value <- df_validate$value-2
-# 
-# df_validate %>% filter(Criteria != 'Crit4') %>% ggplot() +
-#   geom_bar(stat = 'identity', aes(x = Criteria, y = value, fill = Reviewer), position = 'dodge') +
-#   facet_wrap(AI~Question)
+
 
 full_df %>% filter(!str_detect(Reviewer,'GPT')) %>% 
   group_by(Reviewer,Criteria) %>% 
@@ -335,63 +231,6 @@ summary(val)
 valtt <- TukeyHSD(val)
 valtt
 # 
-# df_validate_stats <- df_validate_stats %>% mutate(Criteria = case_match(Criteria, 'Crit1' ~ 'Context to Question',
-#                                                                         'Crit2' ~ 'Response to Context',
-#                                                                         'Crit3' ~ 'AI Response to Human Response'))
-# valplot <- {ggplot(df_validate_stats, aes(x = Reviewer, y = mean, fill = Criteria, group = Criteria)) +
-#     geom_hline(yintercept = 2,linetype = 'dashed',alpha = 0.5 ) +
-#     geom_col(stat = "identity", position = "dodge", color = "black") +
-#     geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                   position = position_dodge(width = 0.9), width = 0.25) +
-#     labs(x = "Reviewer", y = "Mean Assessed Quality") +
-#     theme_classic() +
-#     coord_cartesian(ylim = c(1, 3)) +
-#     theme(legend.position = 'bottom') +
-#     #facet_wrap(~Question) +
-#     scale_fill_manual(values = crit_pal)} #will need to run process_evaluations_new before to get objects
-# 
-# df_val <- df_validate %>% filter(Criteria != "Crit4") %>% mutate(Criteria = case_match(Criteria, 'Crit1' ~ 'Context to Question',
-#                                                                                        'Crit2' ~ 'Response to Context',
-#                                                                                        'Crit3' ~ 'AI Response to Human Response'))
-# crit1_mean <- df_val %>% filter(Criteria == "Context to Question") # crit 1 - in red
-# crit1_mean <- mean(crit1_mean$value)
-# print(crit1_mean) #mean = 2.458
-# 
-# crit2_mean <- df_val %>% filter(Criteria == "Response to Context") #crit 2 - in green
-# crit2_mean <- mean(crit2_mean$value)
-# print(crit2_mean) #mean = 2.533
-# 
-# crit3_mean <- df_val %>% filter(Criteria == "AI Response to Human Response") #crit 3 - in blue
-# crit3_mean <- mean(crit3_mean$value)
-# print(crit3_mean) #mean = 2.242
-# 
-# # attempting to create 5th "reviewer" which is all combined data - I think is valid (talk with Dave) but not best approach
-# df_val2 <- df_val %>% filter(Criteria != "NA") %>% mutate(Reviewer = "R5")
-# valbind <- rbind(df_val, df_val2)
-# 
-# valbind_stats = valbind %>% 
-#   group_by(Criteria, Reviewer) %>% 
-#   summarise(mean = mean(value),
-#             standard_error = sd(value, na.rm = TRUE) / sqrt(n()),
-#             st_dev = sd(value))
-# valplot2 <- {ggplot(valbind_stats, aes(x = Reviewer, y = mean, fill = Criteria, group = Criteria)) +
-#     geom_hline(yintercept = 2,linetype = 'dashed',alpha = 0.5 ) +
-#     geom_col(stat = "identity", position = "dodge", color = "black") +
-#     geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
-#                   position = position_dodge(width = 0.9), width = 0.25) +
-#     labs(x = "Reviewer", y = "Mean Assessed Quality") +
-#     theme_classic() +
-#     coord_cartesian(ylim = c(1, 3)) +
-#     theme(legend.position = 'bottom') +
-#     #facet_wrap(~Question) +
-#     scale_fill_manual(values = crit_pal)} # compares individual reviewers (1-4) to the mean of all the values (R5)
-# 
-# valaov <- aov(data = valbind, value ~ Reviewer*Criteria)
-# summary(valaov)
-# val_hsd <- TukeyHSD(valaov)
-# val_hsd 
-# #only reviewer 1 is sig. diff. from "reviewer 5" (the average of all data) WHEN ALL CRITERIA COMBINED
-# #no interaction between reviewer*criteria (p = 0.222) - only sig. diff is R1 vs R3 response to context
 
 ## LMM analysis ##
 library(lme4)
@@ -466,6 +305,11 @@ statdfx <- statdf %>% filter(Agent == "Human")
 
 #### PROPER MODEL TESTS ####
 statdfx <- statdf %>% filter(Agent == "Human") #only investigating human assessors (no group agent)
+
+
+ttest <- statdfx  %>% group_by(AI,Criteria) %>%  summarise(t_value = t.test(value, mu = 0, alternative = "two.sided")$statistic, p_value = t.test(value, mu = 0, alternative = "two.sided")$p.value)
+print(ttest)
+
 
 #comparing distribution of values to the mean of 2
 statdfx %>% group_by(AI, Criteria) %>% summarise(t_value = t.test(value, mu = 2, alternative = "less")$statistic)
@@ -694,14 +538,19 @@ write.csv(FPdata, file = "falsepos_data.csv", row.names = FALSE)
 
 #### overall plot showing all data
 ```{r overall}
-overall <- ggplot(stat_summary %>% filter(group_agent == 'Human Assessor'), aes(x = AI, y = mean, #fill = Criteria, 
+
+
+
+overall <- ggplot(stat_summary %>% left_join(ttest) %>%  filter(group_agent == 'Human Assessor'), aes(x = AI, y = mean, #fill = Criteria, 
                                                                                 group = Criteria)) +
     geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = 0), fill = "#FFC0CB", alpha = 0.1) +
   geom_rect(aes(xmin = -Inf, xmax = Inf, ymin = 0, ymax = Inf), fill = "#98FB98", alpha = 0.1) +
-  geom_col(stat = "identity", position = "dodge"#, color = "black"
+  geom_col(stat = "identity", position = "dodge", fill = "lightgrey"
            ) +
   geom_errorbar(aes(ymin = mean - standard_error, ymax = mean + standard_error),
                 position = position_dodge(width = 0.9), width = 0.25) +
+
+
   labs( x = "AI Implementation", y = "Assessed Quality") +
 
   theme_classic() +
@@ -711,7 +560,11 @@ overall <- ggplot(stat_summary %>% filter(group_agent == 'Human Assessor'), aes(
   facet_wrap(~Criteria) +
   #scale_y_continuous(    labels = c("Poor","Fair","Good"),breaks = c(1,2,3),) +
   scale_fill_manual(values = crit_pal) +
-  theme(legend.position = 'bottom') 
+  theme(legend.position = 'bottom') +
+      geom_text(aes(label = ifelse(p_value < 0.05, "*", ""),
+                    # Increase this value to make the asterisk larger
+          family = "sans",  # Ensure a font that displays asterisks clearly
+          fontface = "bold"), position = position_dodge(width = 0.9), vjust = -0.5) 
 plot(overall)
 
 ggsave("Figures/F3_overall.svg", width = 7, height = 4, device = "svg")
