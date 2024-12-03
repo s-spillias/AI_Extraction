@@ -1,0 +1,15 @@
+boto3
+requests
+groq
+openai
+pandas
+unidecode
+openpyxl
+nltk
+langchain
+PyMuPDF
+PyPDF2
+python-dotenv
+fuzzywuzzy
+scikit-learn
+habanero
