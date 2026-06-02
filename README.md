@@ -22,8 +22,11 @@ The main purpose of this project is to extract information from scientific paper
 The CBFM directory contains additional scripts and resources:
 - `AI_widget.py`: AI-assisted widget for CBFM data interaction.
 - `FleissKappa.py`: Calculates Fleiss' Kappa for inter-rater reliability.
-- `Extraction_Input/`: Contains input files such as PDFs of scientific papers and extraction questions.
-- `Extraction_Output/`: Stores the results of the extraction process.
+- `Extraction_Input/`: Contains the extraction inputs.
+  - `ExtractionQuestions.csv`: The questions used to drive the extraction.
+  - `papers.csv`: Manifest of the 59 source papers (filename, title, DOI). The full-text PDFs are **not redistributed here for copyright reasons** — use the DOIs in `papers.csv` to obtain them from the publishers, and place them in `CBFM/Extraction_Input/pdfs/` to reproduce the pipeline.
+
+> **Note on outputs:** the README originally referred to a `CBFM/Extraction_Output/` directory. The processed extraction and assessment outputs used in the paper are provided in the top-level [`Data/`](Data/) directory (e.g. `Extraction_ai.xlsx`, `Human_Extraction_Cleaned.xlsx`, `output_assessment*.xlsx`, `full_df.csv`).
 
 ## Setup and Installation
 
@@ -39,12 +42,12 @@ pip install -r requirements.txt
 ## Usage
 
 The main extraction process is run using `Extract.py`. It performs the following steps:
-1. Reads scientific papers from the `CBFM/Extraction_Input/pdfs/` directory.
+1. Reads scientific papers from the `CBFM/Extraction_Input/pdfs/` directory (obtain the PDFs via the DOIs in `CBFM/Extraction_Input/papers.csv`; see the CBFM Directory note above).
 2. Loads questions from `CBFM/Extraction_Input/ExtractionQuestions.csv`.
 3. For each paper, it uses AI models to answer the questions.
 4. Multiple AI agents are used for each question to ensure reliability.
 5. Responses are synthesized and formatted according to predefined criteria.
-6. Results are saved in the `CBFM/Extraction_Output/` directory.
+6. The processed extraction/assessment outputs used in the paper are provided in the top-level `Data/` directory.
 
 To run the extraction process:
 
@@ -54,9 +57,9 @@ python Extract.py
 
 ## Data
 
-- Input data: PDF files of scientific papers related to CBFM, stored in `CBFM/Extraction_Input/pdfs/`.
+- Input papers: identified by title and DOI in `CBFM/Extraction_Input/papers.csv` (59 papers). Full-text PDFs are not redistributed; obtain them from the publishers and place them in `CBFM/Extraction_Input/pdfs/`.
 - Extraction questions: Defined in `CBFM/Extraction_Input/ExtractionQuestions.csv`.
-- Output data: Extracted information is saved in CSV format in `CBFM/Extraction_Output/`.
+- Output data: Processed extraction and assessment results are provided in the top-level `Data/` directory.
 
 ## Customization
 
